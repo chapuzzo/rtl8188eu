@@ -94,3 +94,6 @@ signing_key.priv
 signing_key.x509
 x509.genkey
 
+*.d
+hostapd-0.8/hostapd/hostapd
+hostapd-0.8/hostapd/hostapd_cli
