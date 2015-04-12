@@ -57,6 +57,9 @@ WPA_SECRET="87654321"
 ENCRYPT_MODE=2
 DRIVER=rtl871xdrv
 
+DHCPCONF=~/dhcpd.conf
+HOSTAPDCONF=~/hostapd.conf
+
 case "$1" in
 start)
         echo "Starting AP mode for $NET_AP at address $AP_ADDR.1"
@@ -80,20 +83,20 @@ start)
                 touch /var/lib/dhcp/db/dhcpd.leases
         fi
 	# Write the DHCP server configuration file
-	echo "option domain-name-servers $NAME_SERVER;" > ~/dhcpd.conf
-	echo "default-lease-time 600;" >> ~/dhcpd.conf
-	echo "max-lease-time 7200;" >> ~/dhcpd.conf
-	echo "ddns-update-style none; ddns-updates off;" >> ~/dhcpd.conf
-	echo "subnet $AP_ADDR.0 netmask 255.255.255.0 {" >> ~/dhcpd.conf
-	echo "        range $AP_ADDR.200 $AP_ADDR.229;" >> ~/dhcpd.conf
-	echo "        option subnet-mask 255.255.255.0;" >> ~/dhcpd.conf
-	echo "        option broadcast-address $AP_ADDR.255;" >> ~/dhcpd.conf
-	echo "        option routers $AP_ADDR.1;" >> ~/dhcpd.conf
-	echo "}" >> ~/dhcpd.conf
+	echo "option domain-name-servers $NAME_SERVER;" > $DHCPCONF
+	echo "default-lease-time 600;" >> $DHCPCONF
+	echo "max-lease-time 7200;" >> $DHCPCONF
+	echo "ddns-update-style none; ddns-updates off;" >> $DHCPCONF
+	echo "subnet $AP_ADDR.0 netmask 255.255.255.0 {" >> $DHCPCONF
+	echo "        range $AP_ADDR.200 $AP_ADDR.229;" >> $DHCPCONF
+	echo "        option subnet-mask 255.255.255.0;" >> $DHCPCONF
+	echo "        option broadcast-address $AP_ADDR.255;" >> $DHCPCONF
+	echo "        option routers $AP_ADDR.1;" >> $DHCPCONF
+	echo "}" >> $DHCPCONF
         # Bring up the DHCP server
-        $DHCPD -cf ~/dhcpd.conf $NET_AP
+        $DHCPD -cf $DHCPCONF $NET_AP
 	# Write the hostapd configuration file
-	cat > ~/hostapd.conf << EOF
+	cat > $HOSTAPDCONF << EOF
 auth_algs=1
 beacon_int=100
 country_code=ES
@@ -135,28 +138,28 @@ wmm_ac_vo_cwmin=2
 wmm_ac_vo_txop_limit=47
 wmm_enabled=1
 EOF
-	echo "interface=$NET_AP" >> ~/hostapd.conf
-	echo "ssid=$AP_SSID" >> ~/hostapd.conf 
-	echo "driver=$DRIVER" >> ~/hostapd.conf 
-	echo "hw_mode=g" >> ~/hostapd.conf 
-	echo "channel=$AP_CHANNEL" >> ~/hostapd.conf 
-	echo "wpa=$ENCRYPT_MODE" >> ~/hostapd.conf 
-	echo "wpa_key_mgmt=WPA-PSK" >> ~/hostapd.conf 
-	echo "wpa_pairwise=TKIP CCMP" >> ~/hostapd.conf 
-	echo "rsn_pairwise=CCMP" >> ~/hostapd.conf
-	echo "wpa_passphrase=$WPA_SECRET" >> ~/hostapd.conf 
+	echo "interface=$NET_AP" >> $HOSTAPDCONF
+	echo "ssid=$AP_SSID" >> $HOSTAPDCONF 
+	echo "driver=$DRIVER" >> $HOSTAPDCONF 
+	echo "hw_mode=g" >> $HOSTAPDCONF 
+	echo "channel=$AP_CHANNEL" >> $HOSTAPDCONF 
+	echo "wpa=$ENCRYPT_MODE" >> $HOSTAPDCONF 
+	echo "wpa_key_mgmt=WPA-PSK" >> $HOSTAPDCONF 
+	echo "wpa_pairwise=TKIP CCMP" >> $HOSTAPDCONF 
+	echo "rsn_pairwise=CCMP" >> $HOSTAPDCONF
+	echo "wpa_passphrase=$WPA_SECRET" >> $HOSTAPDCONF 
         # Enable packet forwarding
         echo 1 > /proc/sys/net/ipv4/ip_forward
         # Bring up hostapd
-        $HOSTAPD -dd -B ~/hostapd.conf
+        $HOSTAPD -dd -B $HOSTAPDCONF
         ;;
 stop)
         echo "Stopping AP mode"
         # Stop hostapd and dhcpd daemons
         killall hostapd
         killall dhcpd
-	rm -f ~/hostapd.conf
-	rm -f ~/dhcpd.conf
+	rm -f $HOSTAPDCONF
+	rm -f $DHCPCONF
         ;;
 esac
 
