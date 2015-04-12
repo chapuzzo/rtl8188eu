@@ -34,7 +34,7 @@ esac
 IPTABLES=/sbin/iptables
 IFCONFIG=/sbin/ifconfig
 DHCPD=/usr/sbin/dhcpd
-HOSTAPD=/home/finger/rtl8188eu/hostapd-0.8/hostapd/hostapd
+HOSTAPD=/home/pi/rtl8188eu/hostapd-0.8/hostapd/hostapd
 
 # Symbols for AP and external interfaces
 
@@ -96,7 +96,7 @@ start)
 	cat > ~/hostapd.conf << EOF
 auth_algs=1
 beacon_int=100
-country_code=US
+country_code=ES
 ctrl_interface_group=0
 ctrl_interface=/var/run/hostapd
 dtim_period=2
