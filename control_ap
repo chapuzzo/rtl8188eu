@@ -21,35 +21,26 @@ stop)
 	fi
 ;;
 *)
-        echo "Usage:"
+  echo "Usage:"
 	echo "$0 start AP-iface net_iface"
 	echo "or"
 	echo "$0 stop"
-        exit 1
-        ;;
+  exit 1
+  ;;
 esac
 
 # Symbols for needed programs
-
 IPTABLES=/sbin/iptables
 IFCONFIG=/sbin/ifconfig
 DHCPD=/usr/sbin/dhcpd
 HOSTAPD=/home/pi/rtl8188eu/hostapd-0.8/hostapd/hostapd
 
-# Symbols for AP and external interfaces
+AP_INTERFACE=$2
+EXTERNAL_INTERFACE=$3
 
-NET_AP=$2
-NET_EXT=$3
-
-# First 3 octets of IP address for the AP
-
-AP_ADDR=192.168.0
-
-# IP address for nameserver
+AP_PREFIX=192.168.0
 
 NAME_SERVER=8.8.8.8
-
-# AP Channel, SSID, Encryption method, driver,  and Encryption secret
 
 AP_CHANNEL=11
 AP_SSID=rtwap
@@ -60,43 +51,33 @@ DRIVER=rtl871xdrv
 DHCPCONF=~/dhcpd.conf
 HOSTAPDCONF=~/hostapd.conf
 
-case "$1" in
-start)
-        echo "Starting AP mode for $NET_AP at address $AP_ADDR.1"
-        # Disable packet forwarding
-        echo 0 > /proc/sys/net/ipv4/ip_forward
-        # Stop any existing hostapd and dhcpd daemons
-        killall -q hostapd
-        killall -q dhcpd
-        #Set up forwarding
-        $IPTABLES -t nat -A POSTROUTING -o $NET_EXT -j MASQUERADE
-        $IPTABLES -A FORWARD -i $NET_EXT -o $NET_AP -m state \
-		--state RELATED,ESTABLISHED -j ACCEPT
-        $IPTABLES -A FORWARD -i $NET_AP -o $NET_EXT -j ACCEPT
-        # Get the AP interface in the right state
-        $IFCONFIG $NET_AP down
-        $IFCONFIG $NET_AP up
-        $IFCONFIG $NET_AP $AP_ADDR.1
-        # dhcpd needs to have a leases file available - create it if needed
-        if [ ! -f /var/lib/dhcp/db/dhcpd.leases ]; then
-		mkdir -p /var/lib/dhcp/db
-                touch /var/lib/dhcp/db/dhcpd.leases
-        fi
-	# Write the DHCP server configuration file
+function check_leases_file() {
+  if [ ! -f /var/lib/dhcp/db/dhcpd.leases ]; then
+    mkdir -p /var/lib/dhcp/db
+    touch /var/lib/dhcp/db/dhcpd.leases
+  fi
+}
+
+function config_dhcpd () {
+  check_leases_file
 	echo "option domain-name-servers $NAME_SERVER;" > $DHCPCONF
 	echo "default-lease-time 600;" >> $DHCPCONF
 	echo "max-lease-time 7200;" >> $DHCPCONF
 	echo "ddns-update-style none; ddns-updates off;" >> $DHCPCONF
-	echo "subnet $AP_ADDR.0 netmask 255.255.255.0 {" >> $DHCPCONF
-	echo "        range $AP_ADDR.200 $AP_ADDR.229;" >> $DHCPCONF
+	echo "subnet $AP_PREFIX.0 netmask 255.255.255.0 {" >> $DHCPCONF
+	echo "        range $AP_PREFIX.200 $AP_PREFIX.229;" >> $DHCPCONF
 	echo "        option subnet-mask 255.255.255.0;" >> $DHCPCONF
-	echo "        option broadcast-address $AP_ADDR.255;" >> $DHCPCONF
-	echo "        option routers $AP_ADDR.1;" >> $DHCPCONF
+	echo "        option broadcast-address $AP_PREFIX.255;" >> $DHCPCONF
+	echo "        option routers $AP_PREFIX.1;" >> $DHCPCONF
 	echo "}" >> $DHCPCONF
-        # Bring up the DHCP server
-        $DHCPD -cf $DHCPCONF $NET_AP
-	# Write the hostapd configuration file
-	cat > $HOSTAPDCONF << EOF
+}
+
+function start_dhcpd() {
+  $DHCPD -cf $DHCPCONF $AP_INTERFACE
+}
+
+function config_hostapd() {
+  cat > $HOSTAPDCONF << EOF
 auth_algs=1
 beacon_int=100
 country_code=ES
@@ -137,29 +118,72 @@ wmm_ac_vo_cwmax=3
 wmm_ac_vo_cwmin=2
 wmm_ac_vo_txop_limit=47
 wmm_enabled=1
+interface=$AP_INTERFACE
+ssid=$AP_SSID
+driver=$DRIVER
+hw_mode=g
+channel=$AP_CHANNEL
+wpa=$ENCRYPT_MODE
+wpa_key_mgmt=WPA-PSK
+wpa_pairwise=TKIP CCMP
+rsn_pairwise=CCMP
+wpa_passphrase=$WPA_SECRET
 EOF
-	echo "interface=$NET_AP" >> $HOSTAPDCONF
-	echo "ssid=$AP_SSID" >> $HOSTAPDCONF 
-	echo "driver=$DRIVER" >> $HOSTAPDCONF 
-	echo "hw_mode=g" >> $HOSTAPDCONF 
-	echo "channel=$AP_CHANNEL" >> $HOSTAPDCONF 
-	echo "wpa=$ENCRYPT_MODE" >> $HOSTAPDCONF 
-	echo "wpa_key_mgmt=WPA-PSK" >> $HOSTAPDCONF 
-	echo "wpa_pairwise=TKIP CCMP" >> $HOSTAPDCONF 
-	echo "rsn_pairwise=CCMP" >> $HOSTAPDCONF
-	echo "wpa_passphrase=$WPA_SECRET" >> $HOSTAPDCONF 
-        # Enable packet forwarding
-        echo 1 > /proc/sys/net/ipv4/ip_forward
-        # Bring up hostapd
-        $HOSTAPD -dd -B $HOSTAPDCONF
-        ;;
-stop)
-        echo "Stopping AP mode"
-        # Stop hostapd and dhcpd daemons
-        killall hostapd
-        killall dhcpd
-	rm -f $HOSTAPDCONF
-	rm -f $DHCPCONF
-        ;;
-esac
+}
 
+function start_hostapd() {
+  $HOSTAPD -dd -B $HOSTAPDCONF
+}
+
+function stop_hostapd() {
+  killall hostapd
+  rm -f $HOSTAPDCONF
+}
+
+function stop_dhcpd() {
+  killall dhcpd
+  rm -f $DHCPCONF
+}
+
+function disable_ip_forward() {
+  echo 0 > /proc/sys/net/ipv4/ip_forward
+}
+
+function enable_ip_forward() {
+  echo 1 > /proc/sys/net/ipv4/ip_forward
+}
+
+function configure_ap_interface() {
+  $IFCONFIG $AP_INTERFACE down
+  $IFCONFIG $AP_INTERFACE up
+  $IFCONFIG $AP_INTERFACE $AP_PREFIX.1
+}
+
+function setup_forwarding() {
+  $IPTABLES -t nat -A POSTROUTING -o $EXTERNAL_INTERFACE -j MASQUERADE
+  $IPTABLES -A FORWARD -i $EXTERNAL_INTERFACE -o $AP_INTERFACE -m state \
+    --state RELATED,ESTABLISHED -j ACCEPT
+  $IPTABLES -A FORWARD -i $AP_INTERFACE -o $EXTERNAL_INTERFACE -j ACCEPT
+
+  configure_ap_interface
+}
+
+case "$1" in
+  start)
+    echo "Starting AP mode for $AP_INTERFACE at address $AP_PREFIX.1"
+    disable_ip_forward
+    stop_hostapd
+    stop_dhcpd
+    setup_forwarding
+    config_dhcpd
+    start_dhcpd
+    config_hostapd
+    enable_ip_forward
+    start_hostapd
+    ;;
+  stop)
+    echo "Stopping AP mode"
+    stop_hostapd
+    stop_dhcpd
+    ;;
+esac
