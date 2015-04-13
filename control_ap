@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Script to start/stop a hostapd-based access point
 #
 # Sample start call "control_ap start wlan0 eth0"
