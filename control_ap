@@ -33,6 +33,7 @@ esac
 IPTABLES=/sbin/iptables
 IFCONFIG=/sbin/ifconfig
 DHCPD=/usr/sbin/dhcpd
+DNSMASQ=/usr/sbin/dnsmasq
 HOSTAPD=/home/pi/rtl8188eu/hostapd-0.8/hostapd/hostapd
 
 AP_INTERFACE=$2
@@ -49,6 +50,7 @@ ENCRYPT_MODE=2
 DRIVER=rtl871xdrv
 
 DHCPCONF=~/dhcpd.conf
+DNSMASQCONF=~/dnsmasq.conf
 HOSTAPDCONF=~/hostapd.conf
 
 function check_leases_file() {
@@ -76,6 +78,31 @@ EOF
 
 function start_dhcpd() {
   $DHCPD -cf $DHCPCONF $AP_INTERFACE
+}
+
+function config_dnsmasq() {
+  cat > $DNSMASQCONF << EOF
+domain-needed
+bogus-priv
+strict-order
+interface=$AP_INTERFACE
+bind-interfaces
+no-hosts
+dhcp-range=$AP_PREFIX.50,$AP_PREFIX.150,1h
+dhcp-option=252,"\n"
+dhcp-option=vendor:MSFT,2,1i
+dhcp-script=/bin/echo
+log-queries
+log-dhcp
+address=/double-click.net/127.0.0.1
+conf-file=more.conf
+# addn-hosts=banned.txt
+# conf-dir=/etc/dnsmasq.d
+EOF
+}
+
+start_dnsmasq() {
+  $DNSMASQ -C $DNSMASQCONF
 }
 
 function config_hostapd() {
@@ -147,6 +174,11 @@ function stop_dhcpd() {
   rm -f $DHCPCONF
 }
 
+function stop_dnsmasq() {
+  killall dnsmasq
+  rm -f $DNSMASQCONF
+}
+
 function disable_ip_forward() {
   echo 0 > /proc/sys/net/ipv4/ip_forward
 }
@@ -175,10 +207,10 @@ case "$1" in
     echo "Starting AP mode for $AP_INTERFACE at address $AP_PREFIX.1"
     disable_ip_forward
     stop_hostapd
-    stop_dhcpd
+    stop_dnsmasq
     setup_forwarding
-    config_dhcpd
-    start_dhcpd
+    config_dnsmasq
+    start_dnsmasq
     config_hostapd
     enable_ip_forward
     start_hostapd
@@ -186,6 +218,6 @@ case "$1" in
   stop)
     echo "Stopping AP mode"
     stop_hostapd
-    stop_dhcpd
+    stop_dnsmasq
     ;;
 esac
